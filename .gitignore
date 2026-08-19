@@ -9,6 +9,6 @@ out/
 webview2sdk/
 cmake/
 *.zip
-*.txt
+
 *.js
 *.py
