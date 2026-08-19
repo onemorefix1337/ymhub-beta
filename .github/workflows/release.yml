@@ -27,12 +27,12 @@ jobs:
       - name: Stage artifacts
         run: |
           mkdir release
-          copy build\bin\Release\YMHubDll.dll release\YMHubDll.dll
+          copy build\bin\Release\YMHubBetaDll.dll release\YMHubBetaDll.dll
         shell: cmd
 
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            release/YMHubDll.dll
+            release/YMHubBetaDll.dll
           generate_release_notes: true

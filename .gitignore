@@ -1,8 +1,14 @@
+# CMake / build / VS
 build/
-*.obj
-*.pdb
-*.ilk
-*.exe
-*.dll
 .vs/
 out/
+*.sln
+*.vcxproj*
+
+# Scratch & SDK
+webview2sdk/
+cmake/
+*.zip
+*.txt
+*.js
+*.py
