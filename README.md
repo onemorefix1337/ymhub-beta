@@ -1,41 +1,17 @@
-# YMHub
+# YMHub Beta
 
-Компактный мини-плеер поверх всех окон, горячие клавиши и фоновое
-управление Яндекс Музыкой — без переключения на основное окно.
+Beta branch for experimenting with new Yandex Music UI features.
+YMHub is a DLL mod injected via Forge into the Yandex Music Desktop app.
 
-Сайт проекта: [onemorefix1337.github.io/ymhub](https://onemorefix1337.github.io/ymhub/)
+## Beta Features
+- **Vibe background brightness slider** - fully integrated into the mod menu. Adjust the brightness of the main animated background!
+- **RGB player borders** - an animated RGB gradient outline for the player bar and controls. Includes full support for circular buttons.
+- Full compatibility with the new React-based Yandex Music Desktop App.
 
-## Сборка
+## Auto-build via GitHub Actions
+This repository is configured to auto-build the DLL on every new tag (starting with `v*`).
+The built DLL will be attached as a Release artifact (`YMHubBetaDll.dll`).
 
-Понадобятся:
-
-- Visual Studio 2022+ (компонент "Desktop development with C++")
-- CMake 3.20+
-- [NuGet CLI](https://www.nuget.org/downloads) (или `nuget` из любого другого источника, например из комплекта Visual Studio)
-
-YMHub встраивает WebView2 через статически линкуемый `WebView2LoaderStatic.lib`
-из NuGet-пакета `Microsoft.Web.WebView2` — он не лежит в репозитории и
-его нужно восстановить перед конфигурацией CMake:
-
-```bat
-nuget install Microsoft.Web.WebView2 -Version 1.0.2592.51 -OutputDirectory webview2sdk
-
-cmake -S . -B build -A x64 -DWV2_SDK="%CD%\webview2sdk\Microsoft.Web.WebView2.1.0.2592.51"
-cmake --build build --config Release
-```
-
-Готовый `YMHub.exe` появится в `build\bin\Release\`.
-
-Версию `Microsoft.Web.WebView2` можно взять другую — главное, чтобы
-`-DWV2_SDK` указывал на корень распакованного пакета (там, где лежат
-папки `build/native` и `lib/`).
-
-## Структура проекта
-
-- `src/dll` — `YMHubDll.dll`, инжектируется в процесс Яндекс Музыки;
-  управляет лайками/треком напрямую через DevTools Protocol страницы.
-- `docs` — лендинг проекта (GitHub Pages).
-
-## Лицензия / отказ от ответственности
-
-Независимый проект, не связан с «Яндексом».
+## Setup
+1. Clone this repository.
+2. The GitHub Actions workflow automatically fetches the WebView2 SDK and builds the DLL.
