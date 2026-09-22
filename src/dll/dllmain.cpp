@@ -1,4 +1,4 @@
-#define WIN32_LEAN_AND_MEAN
+﻿#define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <Windows.h>
 #include <dwmapi.h>
@@ -20,6 +20,10 @@
 #include <winrt/Windows.Foundation.Collections.h>
 #include <winrt/Windows.Media.Control.h>
 #include <winrt/Windows.Storage.Streams.h>
+#include <winrt/Windows.Media.SpeechRecognition.h>
+#include <winrt/Windows.Globalization.h>
+#include <sapi.h>
+#pragma comment(lib, "sapi.lib")
 #include <wincodec.h>
 #include <shcore.h>
 #include <shlobj.h>
@@ -1354,6 +1358,13 @@ static void CdpApplyTweaks(DWORD mask, const wchar_t* customCssW) {
                "[class*='VibePlayerControls_skipButton']::after { inset: -6px !important; } "
                "@keyframes rgb-btn{0%{background-position:0 0}100%{background-position:400% 0}}";
     }
+    if (mask & (1u << 12)) {
+        css += "[class*='Navbar_'], [class*='NavbarDesktop_'], nav { background: transparent !important; border: none !important; position: relative; z-index: 100; }"
+               "[class*='CommonLayout_content__'] { overflow: visible !important; }";
+    }
+    if (mask & (1u << 13)) {
+        css += "canvas { filter: blur(60px) saturate(1.4) contrast(1.15) !important; transform: scale(1.15) !important; }";
+    }
     if (customCssW && customCssW[0]) css += CdpUtf8(customCssW);
     std::string esc; esc.reserve(css.size());
     for (unsigned char c : css) {
@@ -1589,11 +1600,21 @@ static void ExecCmd(DWORD cmd) {
 // button on list pages where several are rendered at once. Read-only
 // here, so that ambiguity (a pre-existing characteristic of those two
 // functions, not something this introduces) doesn't carry over.
-static const wchar_t* kTweakLabels[11] = {
-    L"AI-комментарии о треке", L"Анимация фона плеера", L"Плашка «Версия приложения»",
-    L"Барабан рекомендаций", L"Лишние разделы меню",
-    L"Плюс-бейдж в профиле", L"Крупная обложка трека", L"Скрыть имя пользователя",
-    L"RGB обводка плеера", L"RGB анимация фона", L"RGB элементы плеера"
+static const wchar_t* kTweakLabels[14] = {
+    L"Скрыть AI-подсказки к трекам",
+    L"Скрыть анимацию фона волны",
+    L"Скрыть плашку новой беты",
+    L"Скрыть барабан рекомендаций",
+    L"Скрыть лишние разделы меню",
+    L"Скрыть Плюс-бейдж в профиле",
+    L"Крупная обложка (на волне)",
+    L"Скрыть имя (режим стримера)",
+    L"RGB-рамка прогресса",
+    L"RGB-свечение фона волны",
+    L"RGB-кнопки плеера",
+    L"Голосовое управление",
+    L"Прозрачная боковая панель",
+    L"Смягчение Vibe-анимации",
 };
 
 static void CdpInjectMenu(DWORD mask, const wchar_t* customCssW) {
@@ -1862,7 +1883,7 @@ static void CdpInjectMenu(DWORD mask, const wchar_t* customCssW) {
         L"}"
         L"var cssBox=document.getElementById('yc-css');"
         L"if(document.activeElement!==cssBox)cssBox.value=window.__ymhubCss||'';"
-        L"for(var i=0;i<11;i++){var sw=document.getElementById('yc-tw-'+i);"
+        L"for(var i=0;i<14;i++){var sw=document.getElementById('yc-tw-'+i);"
         L"if(sw&&!(sw.dataset.clicked&&Date.now()-sw.dataset.clicked<1500))sw.classList.toggle('on',!!(window.__ymhubMask&(1<<i)));}"
         // Skips any button mid-capture ('rec') so a native-side refresh
         // landing while the user is actively pressing a new key can't
@@ -1877,7 +1898,7 @@ static void CdpInjectMenu(DWORD mask, const wchar_t* customCssW) {
         L"})()";
     std::string preamble =
         "window.__ymhubTwLabels=[";
-    for (int i = 0; i < 11; i++) {
+    for (int i = 0; i < TWEAK_COUNT; i++) {
         if (i) preamble += ",";
         preamble += "\"" + CdpJsonEscape(CdpUtf8(kTweakLabels[i])) + "\"";
     }
@@ -2574,7 +2595,7 @@ static void CdpShowChangelog() {
         L"'</div>'+"
         L"'<div style=\"height:1px; background:rgba(255,255,255,0.08); margin-bottom:20px;\"></div>'+"
         L"'<div style=\"display:flex; justify-content:space-between; align-items:center;\">'+"
-        L"'<a href=\"https://github.com/onemorefix1337/ymhub\" target=\"_blank\" style=\"font-size:13px; color:#888; text-decoration:none; cursor:pointer; transition:color 0.2s;\">Открыть на GitHub</a>'+"
+        L"'<a href=\"https://github.com/onemorefix1337/ymhub-beta\" target=\"_blank\" style=\"font-size:13px; color:#888; text-decoration:none; cursor:pointer; transition:color 0.2s;\">Открыть на GitHub</a>'+"
         L"'<button id=\"ymhub-cl-btn\" style=\"padding:10px 24px; background:#447bfe; border:none; border-radius:8px; color:#fff; font-weight:600; font-size:14px; cursor:pointer; display:flex; align-items:center; gap:6px; transition:opacity 0.2s;\">'+"
         L"'Понятно <svg width=\"12\" height=\"12\" viewBox=\"0 0 24 24\" fill=\"currentColor\"><path d=\"M8 5v14l11-7z\"/></svg>'+"
         L"'</button>'+"
@@ -3536,7 +3557,7 @@ static DWORD WINAPI UpdateCheckThreadFn(LPVOID) {
             if (hSes) {
                 HINTERNET hCon = WinHttpConnect(hSes, L"api.github.com", INTERNET_DEFAULT_HTTPS_PORT, 0);
                 if (hCon) {
-                    HINTERNET hReq = WinHttpOpenRequest(hCon, L"GET", L"/repos/onemorefix1337/ymhub/releases/latest", nullptr, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, WINHTTP_FLAG_SECURE);
+                    HINTERNET hReq = WinHttpOpenRequest(hCon, L"GET", L"/repos/onemorefix1337/ymhub-beta/releases/latest", nullptr, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, WINHTTP_FLAG_SECURE);
                     if (hReq) {
                         std::wstring headers = L"User-Agent: YMHub\r\n";
                         if (WinHttpSendRequest(hReq, headers.c_str(), (DWORD)-1, WINHTTP_NO_REQUEST_DATA, 0, 0, 0) && WinHttpReceiveResponse(hReq, nullptr)) {
@@ -3615,6 +3636,134 @@ static DWORD WINAPI UpdateCheckThreadFn(LPVOID) {
     return 0;
 }
 
+static DWORD WINAPI VoiceControlThreadFn(LPVOID) {
+    CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    {
+        Microsoft::WRL::ComPtr<ISpRecognizer> recognizer;
+        if (SUCCEEDED(CoCreateInstance(CLSID_SpInprocRecognizer, nullptr, CLSCTX_ALL, IID_PPV_ARGS(&recognizer)))) {
+            // Force Russian recognizer token
+            Microsoft::WRL::ComPtr<ISpObjectTokenCategory> cpCategory;
+            if (SUCCEEDED(CoCreateInstance(CLSID_SpObjectTokenCategory, nullptr, CLSCTX_ALL, IID_PPV_ARGS(&cpCategory)))) {
+                if (SUCCEEDED(cpCategory->SetId(SPCAT_RECOGNIZERS, FALSE))) {
+                    Microsoft::WRL::ComPtr<IEnumSpObjectTokens> cpEnum;
+                    if (SUCCEEDED(cpCategory->EnumTokens(L"Language=419", nullptr, &cpEnum))) {
+                        Microsoft::WRL::ComPtr<ISpObjectToken> cpToken;
+                        if (SUCCEEDED(cpEnum->Next(1, &cpToken, nullptr)) && cpToken) {
+                            recognizer->SetRecognizer(cpToken.Get());
+                        } else LogMsg("VoiceControl SAPI warning: Russian recognizer token not found");
+                    }
+                }
+            }
+
+            Microsoft::WRL::ComPtr<ISpAudio> audio;
+            if (SUCCEEDED(CoCreateInstance(CLSID_SpMMAudioIn, nullptr, CLSCTX_ALL, IID_PPV_ARGS(&audio)))) {
+                audio->SetState(SPAS_RUN, 0);
+                recognizer->SetInput(audio.Get(), TRUE);
+            } else LogMsg("VoiceControl SAPI warning: failed to set SpMMAudioIn");
+
+            Microsoft::WRL::ComPtr<ISpRecoContext> context;
+            if (SUCCEEDED(recognizer->CreateRecoContext(&context))) {
+                Microsoft::WRL::ComPtr<ISpRecoGrammar> grammar;
+                if (SUCCEEDED(context->CreateGrammar(1, &grammar))) {
+                    Microsoft::WRL::ComPtr<ISpGrammarBuilder> builder;
+                    if (SUCCEEDED(grammar.As(&builder))) {
+                        SPSTATEHANDLE hState;
+                        if (SUCCEEDED(builder->GetRule(L"Commands", 0, SPRAF_TopLevel | SPRAF_Active, true, &hState))) {
+                            // Russian Cyrillic
+                            builder->AddWordTransition(hState, nullptr, L"дальше", L" ", SPWT_LEXICAL, 1, nullptr);
+                            builder->AddWordTransition(hState, nullptr, L"назад", L" ", SPWT_LEXICAL, 1, nullptr);
+                            builder->AddWordTransition(hState, nullptr, L"пауза", L" ", SPWT_LEXICAL, 1, nullptr);
+                            builder->AddWordTransition(hState, nullptr, L"закрыть", L" ", SPWT_LEXICAL, 1, nullptr);
+                            // English / Transliterated
+                            builder->AddWordTransition(hState, nullptr, L"next", L" ", SPWT_LEXICAL, 1, nullptr);
+                            builder->AddWordTransition(hState, nullptr, L"dalshe", L" ", SPWT_LEXICAL, 1, nullptr);
+                            builder->AddWordTransition(hState, nullptr, L"dal she", L" ", SPWT_LEXICAL, 1, nullptr);
+                            builder->AddWordTransition(hState, nullptr, L"previous", L" ", SPWT_LEXICAL, 1, nullptr);
+                            builder->AddWordTransition(hState, nullptr, L"nazad", L" ", SPWT_LEXICAL, 1, nullptr);
+                            builder->AddWordTransition(hState, nullptr, L"na zad", L" ", SPWT_LEXICAL, 1, nullptr);
+                            builder->AddWordTransition(hState, nullptr, L"pause", L" ", SPWT_LEXICAL, 1, nullptr);
+                            builder->AddWordTransition(hState, nullptr, L"pauza", L" ", SPWT_LEXICAL, 1, nullptr);
+                            builder->AddWordTransition(hState, nullptr, L"close", L" ", SPWT_LEXICAL, 1, nullptr);
+                            builder->AddWordTransition(hState, nullptr, L"zakryt", L" ", SPWT_LEXICAL, 1, nullptr);
+                            builder->Commit(0);
+                        } else LogMsg("VoiceControl SAPI failed: GetRule");
+                        
+                        context->SetNotifyWin32Event();
+                        // Listen to FalseRecognition, Recognition
+                        ULONGLONG ullInterest = SPFEI(SPEI_RECOGNITION) | SPFEI(SPEI_FALSE_RECOGNITION);
+                        context->SetInterest(ullInterest, ullInterest);
+                        
+                        bool isRunning = false;
+                        while (g_run) {
+                            bool shouldRun = (g_tweaksMask & (1u << TWEAK_VOICE_CTRL)) != 0;
+                            if (shouldRun && !isRunning) {
+                                grammar->SetRuleState(L"Commands", nullptr, SPRS_ACTIVE);
+                                recognizer->SetRecoState(SPRST_ACTIVE);
+                                LogMsg("VoiceControl SAPI session started");
+                                isRunning = true;
+                            } else if (!shouldRun && isRunning) {
+                                grammar->SetRuleState(L"Commands", nullptr, SPRS_INACTIVE);
+                                LogMsg("VoiceControl SAPI session stopped");
+                                isRunning = false;
+                            }
+                            
+                            if (isRunning) {
+                                DWORD wait = WaitForSingleObject(context->GetNotifyEventHandle(), 200);
+                                if (wait == WAIT_OBJECT_0) {
+                                    SPEVENT event;
+                                    ULONG fetched = 0;
+                                    while (context->GetEvents(1, &event, &fetched) == S_OK && fetched > 0) {
+                                        if (event.eEventId == SPEI_RECOGNITION) {
+                                            ISpRecoResult* result = (ISpRecoResult*)event.lParam;
+                                            
+                                            // Check confidence
+                                            int conf = 0; // SP_NORMAL_CONFIDENCE
+                                            SPPHRASE* pPhrase = nullptr;
+                                            if (SUCCEEDED(result->GetPhrase(&pPhrase)) && pPhrase) {
+                                                conf = pPhrase->Rule.Confidence;
+                                                CoTaskMemFree(pPhrase);
+                                            }
+
+                                            wchar_t* text = nullptr;
+                                            result->GetText(SP_GETWHOLEPHRASE, SP_GETWHOLEPHRASE, TRUE, &text, nullptr);
+                                            if (text) {
+                                                if (conf < 0) { // SP_LOW_CONFIDENCE = -1
+                                                    LogMsg("VoiceControl SAPI ignored (low confidence): " + ToUtf8(text));
+                                                } else {
+                                                    LogMsg("VoiceControl SAPI recognized: " + ToUtf8(text) + " (conf=" + std::to_string(conf) + ")");
+                                                    if (wcscmp(text, L"дальше") == 0 || wcscmp(text, L"next") == 0 || wcscmp(text, L"dalshe") == 0 || wcscmp(text, L"dal she") == 0) DoNext();
+                                                    else if (wcscmp(text, L"назад") == 0 || wcscmp(text, L"previous") == 0 || wcscmp(text, L"nazad") == 0 || wcscmp(text, L"na zad") == 0) DoPrev();
+                                                    else if (wcscmp(text, L"пауза") == 0 || wcscmp(text, L"pause") == 0 || wcscmp(text, L"pauza") == 0) DoToggle();
+                                                    else if (wcscmp(text, L"закрыть") == 0 || wcscmp(text, L"close") == 0 || wcscmp(text, L"zakryt") == 0) {
+                                                        if (HWND hw = FindMainWnd()) PostMessageW(hw, WM_CLOSE, 0, 0);
+                                                    }
+                                                }
+                                                CoTaskMemFree(text);
+                                            }
+                                        } else if (event.eEventId == SPEI_FALSE_RECOGNITION) {
+                                            LogMsg("VoiceControl SAPI false recognition");
+                                        }
+
+                                        if (event.elParamType == SPET_LPARAM_IS_OBJECT && event.lParam) {
+                                            ((IUnknown*)event.lParam)->Release();
+                                        } else if (event.elParamType == SPET_LPARAM_IS_POINTER && event.lParam) {
+                                            CoTaskMemFree((void*)event.lParam);
+                                        }
+                                    }
+                                }
+                            } else {
+                                Sleep(200);
+                            }
+                        }
+                    } else LogMsg("VoiceControl SAPI failed: ISpGrammarBuilder");
+                } else LogMsg("VoiceControl SAPI failed: CreateGrammar");
+            } else LogMsg("VoiceControl SAPI failed: CreateRecoContext");
+        } else LogMsg("VoiceControl SAPI failed: CoCreateInstance(SpSharedRecognizer)");
+    }
+    CoUninitialize();
+    return 0;
+}
+
 static DWORD WINAPI WorkerThread(LPVOID) {
     InstallCrashHandler();
     g_mutex = CreateMutexW(nullptr, TRUE, YMH_MUTEX_NAME);
@@ -3622,10 +3771,7 @@ static DWORD WINAPI WorkerThread(LPVOID) {
     InitializeCriticalSection(&g_artCS);
     LoadDiscordSetting();
     LoadBridgeSetting();
-    // TEMP CONTROL TEST round 2: CDP threads back on, mini-player's own
-    // WebView2 (UiThread, disabled separately below) still off — isolating
-    // whether the mini-player alone is sufficient, without also needing
-    // CDP disabled, now that round 1 pointed at it instead of CDP.
+    // Start all background workers
     CreateThread(nullptr, 0, CdpAnnounceThread, nullptr, 0, nullptr);
     CreateThread(nullptr, 0, LogBadgeThread, nullptr, 0, nullptr);
     CreateThread(nullptr, 0, UpdateCheckThreadFn, nullptr, 0, nullptr);
@@ -3633,6 +3779,7 @@ static DWORD WINAPI WorkerThread(LPVOID) {
     CreateThread(nullptr, 0, HttpBridgeThreadFn, nullptr, 0, nullptr);
     CreateThread(nullptr, 0, TrackThread, nullptr, 0, nullptr);
     CreateThread(nullptr, 0, DiscordThreadFn, nullptr, 0, nullptr);
+    CreateThread(nullptr, 0, VoiceControlThreadFn, nullptr, 0, nullptr);
 
     // Wait for hotkey window to be ready (up to 2 s), then do initial registration
     for (int i = 0; i < 200 && !g_hkWnd && g_run; i++) Sleep(10);
@@ -3643,17 +3790,6 @@ static DWORD WINAPI WorkerThread(LPVOID) {
     if (g_mutex) { ReleaseMutex(g_mutex); CloseHandle(g_mutex); g_mutex = nullptr; }
     return 0;
 }
-
-// Phase 0 of the host->DLL migration (see plan) proved live that a
-// WebView2 controller can be created and rendered from a thread inside
-// this DLL after CreateRemoteThread+LoadLibrary injection into Yandex
-// Music's already-running process — confirmed via a throwaway popup
-// window with a ticking JS counter (77+ ticks across two separate fresh
-// injections), a correctly-parented msedgewebview2.exe subprocess tree,
-// and clean teardown with no orphaned processes when Yandex Music was
-// killed. That scratch code has been removed now that the question is
-// answered; src/dll/CMakeLists.txt keeps the WebView2 SDK linkage this
-// proved out, ready for the real overlay/hub window port (Фаза 4).
 
 BOOL WINAPI DllMain(HINSTANCE hInst, DWORD reason, LPVOID) {
     if (reason == DLL_PROCESS_ATTACH) {

@@ -1,7 +1,7 @@
-#pragma once
+﻿#pragma once
 
-#define YMHUB_VERSION   "2.1.1"
-#define YMHUB_VERSION_W L"2.1.1"
+#define YMHUB_VERSION   "2.1.2"
+#define YMHUB_VERSION_W L"2.1.2"
 #define YMHUB_VERSION_MAJOR 2
 #define YMHUB_VERSION_MINOR 1
 #define YMHUB_VERSION_PATCH 1
